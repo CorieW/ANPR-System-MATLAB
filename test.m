@@ -27,7 +27,7 @@ function [licensePlateDetectionTime, myResultsMap] = test(objDetector, testData,
         end
     
         % select only the strongest bounding boxes
-        [selectedBboxs] = selectStrongestBbox(bboxes, scores, 'OverlapThreshold', 0.2);
+        [selectedBboxs] = bboxes;
     
         ocrResults = '';
         % loop through each detected bounding box
@@ -57,7 +57,7 @@ function [licensePlateDetectionTime, myResultsMap] = test(objDetector, testData,
             catch ex
             end
         end
-        % No bounding box detected on image
+        % no bounding box detected on image
         if size(selectedBboxs, 1) == 0
             continue;
         end

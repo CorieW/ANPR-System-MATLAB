@@ -1,6 +1,6 @@
 function detector = trainSSD(trainData, valData)
     %% Data pre-processing
-    % Load the training data
+    % load the training data into data stores
     imds = imageDatastore(trainData.imageFilename);
     blds = boxLabelDatastore(trainData(:,3));
     % combine the image and label data into a single datastore of the training
@@ -13,34 +13,57 @@ function detector = trainSSD(trainData, valData)
     % combine the image and label data into a single datastore of the
     % validation stores
     valDS = combine(imds, blds);
+
+    % input size of the model
+    inputSize = [512 512 3];
     
+    % rescale the images to 
+    transformedTrainedDS = transform(trainDS,@(trainData)preprocessData(trainData,inputSize));
+    transformedValidationDS = transform(valDS,@(valData)preprocessData(valData,inputSize));
+
     %% implement model
-    % Generate anchor boxes
-    anchorBoxes = {[30 60; 60 30; 50 50; 100 100], ...
-                   [40 70; 70 40; 60 60; 120 120]};
+    % generate anchor boxes based on training data
+    numAnchors = 6;
+    [anchors] = estimateAnchorBoxes(transformedTrainedDS,numAnchors);
+    area = anchors(:,1).*anchors(:,2);
+    [~,idx] = sort(area,"descend");
+    anchors = anchors(idx,:);
+    anchorBoxes = {anchors(1:3,:);anchors(4:6,:)};
     
-    % Define the classes
+    % define the classes
     classes = {'licensePlate'};
     
-    % Define the layers
+    % define the layers
     layersToConnect =  ["activation_22_relu" "activation_40_relu"];
     
-    % Define the detector
+    % define the detector
     detector = ssdObjectDetector(layerGraph(resnet50),classes,anchorBoxes,DetectionNetworkSource=layersToConnect);
     
-    % Specify the training options
+    % define training options
     options = trainingOptions('adam', ...
         InitialLearnRate=0.001, ...
         LearnRateDropFactor=0.1, ...
         LearnRateSchedule='piecewise',...
         LearnRateDropPeriod=5,...
         Plots='training-progress',...
-        MiniBatchSize=8,...
-        MaxEpochs=100, ...
+        MiniBatchSize=16,...
+        MaxEpochs=30, ...
         BatchNormalizationStatistics="moving",...
         ResetInputNormalization=false,...
         ValidationData=valDS,...
         VerboseFrequency=1);
     
     detector = trainSSDObjectDetector(trainDS,detector,options);
+
+    function data = preprocessData(data,targetSize)
+        for num = 1:size(data,1)
+            I = data{num,1};
+            imgSize = size(I);
+            bboxes = data{num,2};
+            I = im2single(imresize(I,targetSize(1:2)));
+            scale = targetSize(1:2)./imgSize(1:2);
+            bboxes = bboxresize(bboxes,scale);
+            data(num,1:2) = {I,bboxes};
+        end
+    end
 end
